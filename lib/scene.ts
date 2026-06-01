@@ -33,6 +33,8 @@ export interface Scene {
   orientation: "portrait" | "landscape";
   /** Whether to show the bot's reply as text on screen */
   showBotText: boolean;
+  /** URL slug — set by the server after first save */
+  slug?: string;
 }
 
 // ─── Prototype scene ──────────────────────────────────────────────────────────
