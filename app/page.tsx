@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { scene } from "@/lib/scene";
+import { scene as defaultScene, type Scene } from "@/lib/scene";
+
+const STORAGE_KEY = "agentStageScene";
 
 type Message = { role: "user" | "assistant"; content: string };
 type Phase = "idle" | "listening" | "thinking" | "speaking";
 
 export default function StagePage() {
+  const [scene, setScene] = useState<Scene>(defaultScene);
   const [phase, setPhase] = useState<Phase>("idle");
   const [transcript, setTranscript] = useState("");
   const [reply, setReply] = useState("");
@@ -17,6 +20,30 @@ export default function StagePage() {
   const synthRef = useRef<SpeechSynthesis | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const t = useRef<Record<string, number>>({});
+
+  useEffect(() => {
+    async function loadScene() {
+      // 1. Load from localStorage immediately for instant render
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          const parsed = { ...defaultScene, ...JSON.parse(stored) };
+          setScene(parsed);
+          // 2. If we have a slug, also fetch latest from DB in background
+          if (parsed.slug) {
+            const res = await fetch(`/api/scenes/${parsed.slug}`);
+            if (res.ok) {
+              const fresh = await res.json();
+              const merged = { ...defaultScene, ...fresh };
+              setScene(merged);
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+            }
+          }
+        }
+      } catch { /* ignore */ }
+    }
+    loadScene();
+  }, []);
 
   useEffect(() => {
     synthRef.current = window.speechSynthesis;
@@ -152,43 +179,68 @@ export default function StagePage() {
     ? Math.round(t.current.firstToken - t.current.listenEnd) : null;
 
   return (
-    <main className="relative w-full h-screen overflow-hidden bg-black flex flex-col items-center justify-end">
-      <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover opacity-80"
+    <main className={`relative w-full h-screen overflow-hidden bg-black flex items-center ${
+      scene.orientation === "landscape"
+        ? "flex-row justify-end"
+        : "flex-col justify-end"
+    }`}>
+      <video ref={videoRef} className={`absolute inset-0 object-cover opacity-80 ${
+        scene.orientation === "landscape"
+          ? "w-full h-full object-center"
+          : "w-full h-full"
+      }`}
         autoPlay loop muted playsInline />
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
 
-      <div className="relative z-10 text-center mb-1">
-        <p className="text-white/50 text-xs tracking-widest uppercase">{scene.name}</p>
-        <h1 className="text-white text-3xl font-light tracking-wide">{scene.characterName}</h1>
-      </div>
+      {/* In landscape mode, controls sit in a right-side panel */}
+      <div className={`relative z-10 flex flex-col items-center ${
+        scene.orientation === "landscape"
+          ? "h-full justify-end pb-10 pr-10 pl-6 w-72 bg-gradient-to-l from-black/60 to-transparent"
+          : "w-full"
+      }`}>
 
-      <div className="relative z-10 w-full max-w-sm px-6 mb-5 min-h-[72px] flex items-center justify-center">
-        <p className="text-white text-center text-lg leading-relaxed drop-shadow">
-          {phase === "idle" && !reply ? scene.idleMessage : reply || "…"}
-        </p>
-      </div>
+        <div className={`text-center ${scene.orientation === "landscape" ? "mb-4" : "mb-1"}`}>
+          <p className="text-white/50 text-xs tracking-widest uppercase">{scene.name}</p>
+          <h1 className="text-white text-3xl font-light tracking-wide">{scene.characterName}</h1>
+        </div>
 
-      {transcript && (
-        <p className="relative z-10 text-white/40 text-sm italic mb-2">&ldquo;{transcript}&rdquo;</p>
-      )}
+        {scene.showBotText && (
+          <div className={`w-full ${scene.orientation === "landscape" ? "mb-4" : "max-w-sm px-6 mb-5"} min-h-[72px] flex items-center justify-center`}>
+            <p className="text-white text-center text-lg leading-relaxed drop-shadow">
+              {phase === "idle" && !reply ? scene.idleMessage : reply || "…"}
+            </p>
+          </div>
+        )}
 
-      <div className="relative z-10 mb-14 flex flex-col items-center gap-2">
-        <button
-          onPointerDown={phase === "idle" ? startListening : undefined}
-          onPointerUp={phase === "listening" ? stopListening : undefined}
-          onPointerLeave={phase === "listening" ? stopListening : undefined}
-          disabled={phase === "thinking" || phase === "speaking"}
-          aria-label={phaseLabel[phase]}
-          className={`w-20 h-20 rounded-full border-2 flex items-center justify-center
-            transition-all duration-200 select-none
-            disabled:opacity-40 disabled:cursor-not-allowed ${phaseRing[phase]}`}
-        >
-          <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round"
-              d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 016 0v8.25a3 3 0 01-3 3z" />
-          </svg>
-        </button>
-        <p className="text-white/50 text-xs">{phaseLabel[phase]}</p>
+        {!scene.showBotText && phase === "idle" && (
+          <div className={`w-full ${scene.orientation === "landscape" ? "mb-4" : "max-w-sm px-6 mb-5"} min-h-[72px] flex items-center justify-center`}>
+            <p className="text-white text-center text-lg leading-relaxed drop-shadow">{scene.idleMessage}</p>
+          </div>
+        )}
+
+        {transcript && (
+          <p className="text-white/40 text-sm italic mb-2">&ldquo;{transcript}&rdquo;</p>
+        )}
+
+        <div className={`flex flex-col items-center gap-2 ${scene.orientation === "landscape" ? "" : "mb-14"}`}>
+          <button
+            onPointerDown={phase === "idle" ? startListening : undefined}
+            onPointerUp={phase === "listening" ? stopListening : undefined}
+            onPointerLeave={phase === "listening" ? stopListening : undefined}
+            disabled={phase === "thinking" || phase === "speaking"}
+            aria-label={phaseLabel[phase]}
+            className={`w-20 h-20 rounded-full border-2 flex items-center justify-center
+              transition-all duration-200 select-none
+              disabled:opacity-40 disabled:cursor-not-allowed ${phaseRing[phase]}`}
+          >
+            <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round"
+                d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 016 0v8.25a3 3 0 01-3 3z" />
+            </svg>
+          </button>
+          <p className="text-white/50 text-xs">{phaseLabel[phase]}</p>
+        </div>
+
       </div>
 
       {process.env.NODE_ENV === "development" && loopMs !== null && (

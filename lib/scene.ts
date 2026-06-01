@@ -29,6 +29,10 @@ export interface Scene {
   idleMessage: string;
   selectionPrompt: string;
   videos: VideoClip[];
+  /** Layout orientation for the consumer view */
+  orientation: "portrait" | "landscape";
+  /** Whether to show the bot's reply as text on screen */
+  showBotText: boolean;
 }
 
 // ─── Prototype scene ──────────────────────────────────────────────────────────
@@ -75,4 +79,10 @@ Reply with ONLY a single number — nothing else.
     { index: 4, url: "/videos/greeting.mp4",   label: "Greeting" },   // waving, welcoming
     { index: 5, url: "/videos/neutral.mp4",    label: "Neutral" },    // default fallback
   ],
+
+  // Portrait = mobile/phone (vertical video), landscape = PC/kiosk (horizontal video)
+  orientation: "portrait",
+
+  // Whether the bot's reply text is shown on screen during playback
+  showBotText: true,
 };
