@@ -1,117 +1,153 @@
 # AgentStage
 
-Voice-driven character interactions for exhibitions, events, and campaigns.
+AgentStage is an AI-powered platform for creating interactive voice-driven digital characters for exhibitions, museums, events, campaigns, and public installations.
 
-A visitor speaks → Mistral AI replies → a video clip plays in sync with the spoken response.
+Visitors can speak naturally with a character, receive AI-generated responses in real time, and watch synchronized video performances that bring the interaction to life.
 
-Built with **Next.js 14**, **Mistral AI**, and the browser's **Web Speech API**.
-
----
-
-## Prototype scope
-
-This repo is the **consumer prototype** — one hardcoded scene, no database, no creator UI yet.
-It validates the core voice loop and answers four questions:
-
-- How fast is STT → LLM first token? (target: under 2 s)
-- Does the video selector pick the right clip reliably?
-- Push-to-talk vs VAD — which feels natural on a phone?
-- Does the idle screen pull someone in within 3 seconds?
+Built with Next.js, Mistral AI, Supabase, and the Web Speech API.
 
 ---
 
-## Quick start
+## Features
 
-### 1. Clone and install
+### Visitor Experience
+
+- Voice-based conversations with AI characters
+- Real-time speech-to-text transcription
+- Streaming AI responses powered by Mistral AI
+- Text-to-speech playback in the browser
+- Dynamic video selection based on character responses
+- Mobile-friendly push-to-talk interface
+- Idle mode designed to attract visitor engagement
+
+### Creator Dashboard
+
+- Create and manage multiple characters
+- Define character personalities and system prompts
+- Upload and organize video clips
+- Configure scene-specific knowledge and behavior
+- Manage exhibition experiences without modifying code
+
+### Database & Content Management
+
+- Supabase-backed data storage
+- Scene and character persistence
+- Video metadata management
+- Centralized configuration for deployments
+- Scalable architecture supporting multiple projects and installations
+
+---
+
+## Architecture
+
+```text
+Visitor
+   │
+   ▼
+Speech Recognition
+   │
+   ▼
+Next.js Application
+   │
+   ├── Chat API ─────────► Mistral AI
+   │                         │
+   │                         ▼
+   │                 Streaming Response
+   │
+   ├── Video Selection API
+   │
+   └── Supabase Database
+           │
+           ├── Scenes
+           ├── Characters
+           └── Video Assets
+```
+
+The chat response generation and video selection processes run in parallel, allowing spoken dialogue and visual performance to remain synchronized.
+
+---
+
+## Tech Stack
+
+| Category           | Technology           |
+| ------------------ | -------------------- |
+| Framework          | Next.js (App Router) |
+| Language           | TypeScript           |
+| AI Model           | Mistral AI           |
+| Database           | Supabase             |
+| Authentication     | Supabase Auth        |
+| Speech Recognition | Web Speech API       |
+| Speech Synthesis   | Web Speech API       |
+| Styling            | Tailwind CSS         |
+| Deployment         | Vercel               |
+
+---
+
+## Getting Started
+
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/agentstage.git
 cd agentstage
+```
+
+### 2. Install dependencies
+
+```bash
 npm install
 ```
 
-### 2. Add your Mistral API key
+### 3. Configure environment variables
 
-```bash
-cp .env.example .env.local
-# edit .env.local → paste your key from https://console.mistral.ai/
+Create a `.env.local` file:
+
+```env
+MISTRAL_API_KEY=your_mistral_api_key
+
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ```
 
-### 3. Add video clips (optional)
-
-Place short MP4 files (under 15 s) in `/public/videos/`:
-
-```
-public/videos/explaining.mp4
-public/videos/directing.mp4
-public/videos/playful.mp4
-public/videos/greeting.mp4
-public/videos/neutral.mp4
-```
-
-The app runs without them — just shows a black background.
-
-### 4. Run
+### 4. Run the development server
 
 ```bash
 npm run dev
-# open http://localhost:3000 in Chrome
 ```
 
-> Speech recognition requires Chrome on desktop or Android.
+Open:
 
----
-
-## How it works
-
-```
-visitor speaks
-     |
-SpeechRecognition (browser)
-     |
-POST /api/chat ──────────────► Mistral AI (streaming SSE)
-     |                               |
-     |              ┌────────────────┘
-     |              |  streams reply text
-     |     ┌────────┴────────────┐
-     |     ▼                     ▼
-     | SpeechSynthesis    POST /api/select-video
-     | (speaks reply)     (Mistral picks 1 digit)
-     |                           |
-     |                     plays video clip
-     ▼
-  back to idle
+```text
+http://localhost:3000
 ```
 
-The chat stream and video selector run **in parallel** — reply is spoken and matching clip plays together.
+---
+
+## Project Structure
+
+```text
+app/
+├── api/
+├── creator/
+├── dashboard/
+└── page.tsx
+
+components/
+├── creator/
+├── character/
+└── ui/
+
+lib/
+├── supabase/
+├── ai/
+└── utilities/
+
+public/
+└── videos/
+```
 
 ---
 
-## Customise the scene
-
-Edit `lib/scene.ts` to change the character, knowledge, and video rules.
-
----
-
-## Deploy to Vercel
-
-1. Push to GitHub
-2. Import repo at [vercel.com/new](https://vercel.com/new)
-3. Add `MISTRAL_API_KEY` in Settings → Environment Variables
-4. Deploy — HTTPS auto-provisioned
-
----
-
-## Stack
-
-| | |
-|---|---|
-| Framework | Next.js 14 (App Router) |
-| LLM | Mistral AI `mistral-small-latest` |
-| Voice in | Web Speech API `SpeechRecognition` |
-| Voice out | Web Speech API `SpeechSynthesis` |
-| Hosting | Vercel |
-
----
-
-HBK Saar — Experimental Media Lab — AgentStage, May 2025
+Developed at HBK Saar - Summer Semester 2026.
