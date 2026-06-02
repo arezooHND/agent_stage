@@ -40,7 +40,9 @@ export default function StagePage() {
             }
           }
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
     loadScene();
   }, []);
@@ -49,12 +51,16 @@ export default function StagePage() {
     synthRef.current = window.speechSynthesis;
     // Pre-load voices — browsers load them async, must trigger early
     window.speechSynthesis.getVoices();
-    window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+    window.speechSynthesis.onvoiceschanged = () =>
+      window.speechSynthesis.getVoices();
   }, []);
 
   const speak = useCallback((text: string) => {
     const synth = synthRef.current ?? window.speechSynthesis;
-    if (!synth) { setPhase("idle"); return; }
+    if (!synth) {
+      setPhase("idle");
+      return;
+    }
 
     synth.cancel();
 
@@ -68,13 +74,13 @@ export default function StagePage() {
       // Pick best available English voice — prefer local (on-device) voices
       const voices = synth.getVoices();
       const preferred =
-        voices.find(v => v.lang.startsWith("en") && v.localService) ??
-        voices.find(v => v.lang.startsWith("en")) ??
+        voices.find((v) => v.lang.startsWith("en") && v.localService) ??
+        voices.find((v) => v.lang.startsWith("en")) ??
         voices[0];
       if (preferred) utt.voice = preferred;
 
       // Always return to idle, even if TTS errors out
-      utt.onend   = () => setPhase("idle");
+      utt.onend = () => setPhase("idle");
       utt.onerror = () => setPhase("idle");
 
       synth.speak(utt);
@@ -92,58 +98,89 @@ export default function StagePage() {
     t.current.selectorEnd = performance.now();
   }, []);
 
-  const sendMessage = useCallback(async (userText: string) => {
-    setPhase("thinking");
-    setReply("");
-    t.current.thinkStart = performance.now();
-    const newMessages: Message[] = [...messages, { role: "user", content: userText }];
-    setMessages(newMessages);
+  const sendMessage = useCallback(
+    async (userText: string) => {
+      setPhase("thinking");
+      setReply("");
+      t.current.thinkStart = performance.now();
+      const newMessages: Message[] = [
+        ...messages,
+        { role: "user", content: userText },
+      ];
+      setMessages(newMessages);
 
-    const res = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: newMessages }),
-    });
-    if (!res.body) { setPhase("idle"); return; }
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let fullReply = "";
-    let firstChunk = true;
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
-      for (const line of chunk.split("\n").filter(l => l.startsWith("data: "))) {
-        const json = line.slice(6).trim();
-        if (json === "[DONE]") continue;
-        try {
-          const delta = JSON.parse(json).choices?.[0]?.delta?.content ?? "";
-          if (delta) {
-            if (firstChunk) { t.current.firstToken = performance.now(); firstChunk = false; }
-            fullReply += delta;
-            setReply(fullReply);
-          }
-        } catch { /* skip malformed SSE lines */ }
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: newMessages }),
+      });
+      if (!res.body) {
+        setPhase("idle");
+        return;
       }
-    }
 
-    setMessages(prev => [...prev, { role: "assistant", content: fullReply }]);
-    setPhase("speaking");
-    selectVideo(fullReply);
-    speak(fullReply);
-  }, [messages, selectVideo, speak]);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let fullReply = "";
+      let firstChunk = true;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        for (const line of chunk
+          .split("\n")
+          .filter((l) => l.startsWith("data: "))) {
+          const json = line.slice(6).trim();
+          if (json === "[DONE]") continue;
+          try {
+            const delta = JSON.parse(json).choices?.[0]?.delta?.content ?? "";
+            if (delta) {
+              if (firstChunk) {
+                t.current.firstToken = performance.now();
+                firstChunk = false;
+              }
+              fullReply += delta;
+              setReply(fullReply);
+            }
+          } catch {
+            /* skip malformed SSE lines */
+          }
+        }
+      }
+
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: fullReply },
+      ]);
+      setPhase("speaking");
+      selectVideo(fullReply);
+      speak(fullReply);
+    },
+    [messages, selectVideo, speak],
+  );
 
   const startListening = useCallback(() => {
     const SR =
-      (window as typeof window & { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition ??
+      (
+        window as typeof window & {
+          webkitSpeechRecognition?: typeof SpeechRecognition;
+        }
+      ).webkitSpeechRecognition ??
       (typeof SpeechRecognition !== "undefined" ? SpeechRecognition : null);
-    if (!SR) { alert("Use Chrome for speech recognition."); return; }
+    if (!SR) {
+      alert("Use Chrome for speech recognition.");
+      return;
+    }
 
     const rec = new SR();
-    rec.lang = "en-US"; rec.interimResults = false; rec.maxAlternatives = 1;
-    rec.onstart  = () => { setPhase("listening"); t.current.listenStart = performance.now(); };
+    rec.lang = "en-US";
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    rec.onstart = () => {
+      setPhase("listening");
+      t.current.listenStart = performance.now();
+    };
     rec.onresult = (e: SpeechRecognitionEvent) => {
       const text = e.results[0][0].transcript;
       t.current.listenEnd = performance.now();
@@ -155,10 +192,12 @@ export default function StagePage() {
     rec.start();
   }, [sendMessage]);
 
-  const stopListening = useCallback(() => { recognitionRef.current?.stop(); }, []);
+  const stopListening = useCallback(() => {
+    recognitionRef.current?.stop();
+  }, []);
 
   useEffect(() => {
-    const clip = scene.videos.find(v => v.index === videoIndex);
+    const clip = scene.videos.find((v) => v.index === videoIndex);
     if (videoRef.current && clip) {
       videoRef.current.src = clip.url;
       videoRef.current.play().catch(() => {});
@@ -166,7 +205,10 @@ export default function StagePage() {
   }, [videoIndex]);
 
   const phaseLabel: Record<Phase, string> = {
-    idle: "Tap to speak", listening: "Listening…", thinking: "Thinking…", speaking: "Speaking…",
+    idle: "Tap to speak",
+    listening: "Listening…",
+    thinking: "Thinking…",
+    speaking: "Speaking…",
   };
   const phaseRing: Record<Phase, string> = {
     idle: "bg-white/10 hover:bg-white/20 border-white/30",
@@ -175,37 +217,56 @@ export default function StagePage() {
     speaking: "bg-green-400/50 border-green-300",
   };
 
-  const loopMs = t.current.firstToken && t.current.listenEnd
-    ? Math.round(t.current.firstToken - t.current.listenEnd) : null;
+  const loopMs =
+    t.current.firstToken && t.current.listenEnd
+      ? Math.round(t.current.firstToken - t.current.listenEnd)
+      : null;
 
   return (
-    <main className={`relative w-full h-screen overflow-hidden bg-black flex items-center ${
-      scene.orientation === "landscape"
-        ? "flex-row justify-end"
-        : "flex-col justify-end"
-    }`}>
-      <video ref={videoRef} className={`absolute inset-0 object-cover opacity-80 ${
+    <main
+      className={`relative w-full h-screen overflow-hidden bg-black flex items-center ${
         scene.orientation === "landscape"
-          ? "w-full h-full object-center"
-          : "w-full h-full"
+          ? "flex-row justify-end"
+          : "flex-col justify-end"
       }`}
-        autoPlay loop muted playsInline />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
+    >
+      <video
+        ref={videoRef}
+        className={`absolute inset-0 object-cover opacity-80 ${
+          scene.orientation === "landscape"
+            ? "w-full h-full object-center"
+            : "w-full h-full"
+        }`}
+        autoPlay
+        loop
+        muted
+        playsInline
+      />
+      <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/10 to-transparent" />
 
       {/* In landscape mode, controls sit in a right-side panel */}
-      <div className={`relative z-10 flex flex-col items-center ${
-        scene.orientation === "landscape"
-          ? "h-full justify-end pb-10 pr-10 pl-6 w-72 bg-gradient-to-l from-black/60 to-transparent"
-          : "w-full"
-      }`}>
-
-        <div className={`text-center ${scene.orientation === "landscape" ? "mb-4" : "mb-1"}`}>
-          <p className="text-white/50 text-xs tracking-widest uppercase">{scene.name}</p>
-          <h1 className="text-white text-3xl font-light tracking-wide">{scene.characterName}</h1>
+      <div
+        className={`relative z-10 flex flex-col items-center ${
+          scene.orientation === "landscape"
+            ? "h-full justify-end pb-10 pr-10 pl-6 w-72 bg-linear-to-l from-black/60 to-transparent"
+            : "w-full"
+        }`}
+      >
+        <div
+          className={`text-center ${scene.orientation === "landscape" ? "mb-4" : "mb-1"}`}
+        >
+          <p className="text-white/50 text-xs tracking-widest uppercase">
+            {scene.name}
+          </p>
+          <h1 className="text-white text-3xl font-light tracking-wide">
+            {scene.characterName}
+          </h1>
         </div>
 
         {scene.showBotText && (
-          <div className={`w-full ${scene.orientation === "landscape" ? "mb-4" : "max-w-sm px-6 mb-5"} min-h-[72px] flex items-center justify-center`}>
+          <div
+            className={`w-full ${scene.orientation === "landscape" ? "mb-4" : "max-w-sm px-6 mb-5"} min-h-18 flex items-center justify-center`}
+          >
             <p className="text-white text-center text-lg leading-relaxed drop-shadow">
               {phase === "idle" && !reply ? scene.idleMessage : reply || "…"}
             </p>
@@ -213,16 +274,24 @@ export default function StagePage() {
         )}
 
         {!scene.showBotText && phase === "idle" && (
-          <div className={`w-full ${scene.orientation === "landscape" ? "mb-4" : "max-w-sm px-6 mb-5"} min-h-[72px] flex items-center justify-center`}>
-            <p className="text-white text-center text-lg leading-relaxed drop-shadow">{scene.idleMessage}</p>
+          <div
+            className={`w-full ${scene.orientation === "landscape" ? "mb-4" : "max-w-sm px-6 mb-5"} min-h-18 flex items-center justify-center`}
+          >
+            <p className="text-white text-center text-lg leading-relaxed drop-shadow">
+              {scene.idleMessage}
+            </p>
           </div>
         )}
 
         {transcript && (
-          <p className="text-white/40 text-sm italic mb-2">&ldquo;{transcript}&rdquo;</p>
+          <p className="text-white/40 text-sm italic mb-2">
+            &ldquo;{transcript}&rdquo;
+          </p>
         )}
 
-        <div className={`flex flex-col items-center gap-2 ${scene.orientation === "landscape" ? "" : "mb-14"}`}>
+        <div
+          className={`flex flex-col items-center gap-2 ${scene.orientation === "landscape" ? "" : "mb-14"}`}
+        >
           <button
             onPointerDown={phase === "idle" ? startListening : undefined}
             onPointerUp={phase === "listening" ? stopListening : undefined}
@@ -233,22 +302,38 @@ export default function StagePage() {
               transition-all duration-200 select-none
               disabled:opacity-40 disabled:cursor-not-allowed ${phaseRing[phase]}`}
           >
-            <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round"
-                d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 016 0v8.25a3 3 0 01-3 3z" />
+            <svg
+              className="w-8 h-8 text-white"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={1.5}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 016 0v8.25a3 3 0 01-3 3z"
+              />
             </svg>
           </button>
           <p className="text-white/50 text-xs">{phaseLabel[phase]}</p>
         </div>
-
       </div>
 
       {process.env.NODE_ENV === "development" && loopMs !== null && (
         <div className="absolute top-4 right-4 z-20 bg-black/70 text-white/80 text-xs p-3 rounded-lg font-mono space-y-1">
           <p className="font-bold text-white mb-1">Latency</p>
-          <p>STT → first token: <span className="text-yellow-300">{loopMs}ms</span></p>
+          <p>
+            STT → first token:{" "}
+            <span className="text-yellow-300">{loopMs}ms</span>
+          </p>
           {t.current.selectorEnd && t.current.thinkStart && (
-            <p>Selector: <span className="text-green-300">{Math.round(t.current.selectorEnd - t.current.thinkStart)}ms</span></p>
+            <p>
+              Selector:{" "}
+              <span className="text-green-300">
+                {Math.round(t.current.selectorEnd - t.current.thinkStart)}ms
+              </span>
+            </p>
           )}
           <p className="text-white/40">Video: {videoIndex}</p>
         </div>
