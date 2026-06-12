@@ -9,6 +9,8 @@ export interface VideoClip {
   index: number;
   url: string;
   label: string;
+  /** Optional longer description — helps the AI pick the right clip */
+  description?: string;
 }
 
 /**
@@ -30,9 +32,11 @@ export interface Scene {
   selectionPrompt: string;
   videos: VideoClip[];
   /** Layout orientation for the consumer view */
-  orientation: "portrait" | "landscape";
+  orientation: "portrait" | "landscape" | "auto";
   /** Whether to show the bot's reply as text on screen */
   showBotText: boolean;
+  /** Which video clip plays when idle (loops until visitor speaks) */
+  idleVideoIndex: number;
   /** URL slug — set by the server after first save */
   slug?: string;
 }
@@ -75,15 +79,18 @@ Reply with ONLY a single number — nothing else.
   // Files live in /public/videos/ — served statically by Next.js
   // The index must match the numbers used in selectionPrompt above
   videos: [
-    { index: 1, url: "/videos/explaining.mp4", label: "Explaining" }, // artwork/concept explanations
-    { index: 2, url: "/videos/directing.mp4",  label: "Directing" },  // pointing, giving directions
-    { index: 3, url: "/videos/playful.mp4",    label: "Playful" },    // laughing, light-hearted
-    { index: 4, url: "/videos/greeting.mp4",   label: "Greeting" },   // waving, welcoming
-    { index: 5, url: "/videos/neutral.mp4",    label: "Neutral" },    // default fallback
+    { index: 1, url: "/videos/explaining.mp4", label: "Explaining", description: "Use when describing an artwork, material, technique, or artistic concept in detail." },
+    { index: 2, url: "/videos/directing.mp4",  label: "Directing",  description: "Use when giving directions, locations, practical information about the venue." },
+    { index: 3, url: "/videos/playful.mp4",    label: "Playful",    description: "Use when the reply is playful, funny, light-hearted, or includes a joke." },
+    { index: 4, url: "/videos/greeting.mp4",   label: "Greeting",   description: "Use when welcoming a visitor, saying hello, goodbye, or thanking them." },
+    { index: 5, url: "/videos/neutral.mp4",    label: "Neutral",    description: "Use for anything else — general talking, unclear context, or fallback." },
   ],
 
-  // Portrait = mobile/phone (vertical video), landscape = PC/kiosk (horizontal video)
-  orientation: "portrait",
+  // auto = detect from device; portrait = force vertical; landscape = force horizontal
+  orientation: "auto",
+
+  // Which clip loops on the idle screen (index matches video clip index)
+  idleVideoIndex: 5,
 
   // Whether the bot's reply text is shown on screen during playback
   showBotText: true,

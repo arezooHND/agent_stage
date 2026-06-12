@@ -143,7 +143,7 @@ function SectionScene({ scene, onChange }: { scene: Scene; onChange: (s: Scene) 
       <div className="grid grid-cols-2 gap-4">
         <Field label="Display orientation">
           <div className="flex gap-2">
-            {(["portrait", "landscape"] as const).map(mode => (
+            {(["portrait", "landscape", "auto"] as const).map(mode => (
               <button
                 key={mode}
                 onClick={() => onChange({ ...scene, orientation: mode })}
@@ -153,8 +153,8 @@ function SectionScene({ scene, onChange }: { scene: Scene; onChange: (s: Scene) 
                     : "bg-slate-800/60 border-slate-700/60 text-slate-400 hover:border-slate-600"
                 }`}
               >
-                <span className="text-lg">{mode === "portrait" ? "📱" : "🖥️"}</span>
-                <span className="capitalize">{mode}</span>
+                <span className="text-lg">{mode === "portrait" ? "📱" : mode === "landscape" ? "🖥️" : "✨"}</span>
+                <span className="capitalize">{mode === "auto" ? "Auto" : mode}</span>
               </button>
             ))}
           </div>
@@ -187,17 +187,7 @@ function SectionCharacter({ scene, onChange }: { scene: Scene; onChange: (s: Sce
         />
       </Field>
 
-      <Field
-        label="Video selection rules"
-        hint="One line per video clip. The AI reads the bot reply + these rules and returns a single number. Be specific — this controls which clip plays."
-      >
-        <Textarea
-          rows={10}
-          value={scene.selectionPrompt}
-          onChange={e => onChange({ ...scene, selectionPrompt: e.target.value })}
-          placeholder={`Read the chatbot reply below, then pick the best video.\nReply with ONLY a single number.\n\n1 = explaining an artwork\n2 = giving directions\n3 = something playful\n4 = greeting or farewell\n5 = anything else`}
-        />
-      </Field>
+
     </SectionCard>
   );
 }
@@ -338,6 +328,12 @@ function SectionVideos({ scene, onChange }: { scene: Scene; onChange: (s: Scene)
                   onChange={e => updateVideo(v.index, "label", e.target.value)}
                   placeholder="Label (e.g. Explaining)"
                 />
+                <Textarea
+                  rows={2}
+                  value={v.description ?? ""}
+                  onChange={e => updateVideo(v.index, "description", e.target.value)}
+                  placeholder="Describe when to use this clip — the AI reads this to pick the right video. E.g. 'Use when explaining an artwork, technique, or material in detail.'"
+                />
                 {v.url ? (
                   <div className="relative group rounded-xl overflow-hidden">
                     <video
@@ -360,17 +356,38 @@ function SectionVideos({ scene, onChange }: { scene: Scene; onChange: (s: Scene)
                   <VideoUploadZone clipIndex={v.index} onUploaded={url => updateVideo(v.index, "url", url)} />
                 )}
               </div>
-              <button
-                onClick={() => removeVideo(v.index)}
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors shrink-0 mt-0.5"
-                aria-label="Remove clip"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="flex flex-col gap-1 shrink-0">
+                <button
+                  onClick={() => onChange({ ...scene, idleVideoIndex: v.index })}
+                  title="Set as idle/default video"
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors text-xs font-bold ${
+                    scene.idleVideoIndex === v.index
+                      ? "bg-indigo-500/30 text-indigo-300 border border-indigo-500/40"
+                      : "text-slate-600 hover:text-indigo-400 hover:bg-indigo-500/10"
+                  }`}
+                  aria-label="Set as idle video"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.91 11.672a.375.375 0 010 .656l-5.603 3.113a.375.375 0 01-.557-.328V8.887c0-.286.307-.466.557-.327l5.603 3.112z" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => removeVideo(v.index)}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                  aria-label="Remove clip"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
           ))}
+
+          <p className="text-xs text-slate-600 px-1">
+            Click <svg className="w-3 h-3 inline mb-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15.91 11.672a.375.375 0 010 .656l-5.603 3.113a.375.375 0 01-.557-.328V8.887c0-.286.307-.466.557-.327l5.603 3.112z" /></svg> on a clip to set it as the idle video — it loops until the visitor speaks.
+          </p>
 
           <button
             onClick={addVideo}
@@ -581,7 +598,7 @@ const NAV: { id: NavSection; label: string; icon: React.ReactNode }[] = [
 
 function isDone(id: NavSection, scene: Scene): boolean {
   if (id === "scene") return !!scene.name && !!scene.systemPrompt;
-  if (id === "character") return !!scene.characterName && !!scene.selectionPrompt;
+  if (id === "character") return !!scene.characterName;
   if (id === "videos") return scene.videos.length > 0 && scene.videos.every(v => !!v.url);
   return false;
 }
@@ -595,12 +612,12 @@ export default function CreatorPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Load persisted scene from localStorage after hydration
+  // Load latest scene from DB on mount — source of truth is Supabase, not localStorage
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) setScene({ ...defaultScene, ...JSON.parse(stored) });
-    } catch { /* ignore corrupt data */ }
+    fetch("/api/scenes/latest")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setScene({ ...defaultScene, ...data }); })
+      .catch(() => {});
   }, []);
 
   const save = async () => {
@@ -615,7 +632,6 @@ export default function CreatorPage() {
       if (!res.ok) throw new Error(data.error ?? "Save failed");
       const updated = { ...scene, slug: data.slug };
       setScene(updated);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (e) {
@@ -705,7 +721,7 @@ export default function CreatorPage() {
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
               {active === "scene" && "Core identity and behaviour of your agent"}
-              {active === "character" && "Name, voice and video selection rules"}
+              {active === "character" && "Name and appearance of your character"}
               {active === "videos" && "Upload and label your video clips"}
               {active === "share" && "Share, embed or print your agent"}
             </p>
