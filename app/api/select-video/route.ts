@@ -6,14 +6,13 @@ export const runtime = "edge";
 
 async function loadScene(): Promise<Scene> {
   try {
-    const { data, error } = await supabase
-      .from("scenes")
-      .select("data")
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .single();
+    const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), 800));
+    const query = supabase.from("scenes").select("data").order("updated_at", { ascending: false }).limit(1).single();
+    const result = await Promise.race([query, timeout]);
+    if (!result) return defaultScene;
+    const { data, error } = result as Awaited<typeof query>;
     if (error || !data) return defaultScene;
-    return { ...defaultScene, ...data.data };
+    return { ...defaultScene, ...(data as { data: Partial<Scene> }).data };
   } catch {
     return defaultScene;
   }

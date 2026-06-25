@@ -5,14 +5,18 @@ import { scene as defaultScene, type Scene } from "@/lib/scene";
 
 type Message = { role: "user" | "assistant"; content: string };
 type Phase = "idle" | "listening" | "thinking" | "speaking";
+type Model = "mistral-large-latest" | "open-mistral-nemo";
 
 export default function StagePage() {
   const [scene, setScene] = useState<Scene>(defaultScene);
   const [phase, setPhase] = useState<Phase>("idle");
   const [transcript, setTranscript] = useState("");
   const [reply, setReply] = useState("");
-  const [videoIndex, setVideoIndex] = useState<number | null>(null); // null until scene loads
+  const [videoIndex, setVideoIndex] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [model, setModel] = useState<Model>("mistral-large-latest");
+  const [conversationStarted, setConversationStarted] = useState(false);
+  const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Resolved orientation — "auto" detects from device/window at runtime
   const getOrientation = () => {
@@ -54,40 +58,66 @@ export default function StagePage() {
 
   useEffect(() => {
     synthRef.current = window.speechSynthesis;
-    window.speechSynthesis.getVoices();
-    window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+    const logVoices = () => {
+      const voices = window.speechSynthesis.getVoices();
+      console.log("Available voices:", voices.map(v => `${v.name} (${v.lang})`));
+    };
+    logVoices();
+    window.speechSynthesis.onvoiceschanged = logVoices;
   }, []);
 
-  const speak = useCallback((text: string) => {
-    const synth = synthRef.current ?? window.speechSynthesis;
-    if (!synth) { setPhase("idle"); return; }
-    synth.cancel();
-    setTimeout(() => {
-      const utt = new SpeechSynthesisUtterance(text);
-      utt.rate = 1.0; utt.pitch = 1.1; utt.lang = "en-US";
-      const voices = synth.getVoices();
-      const preferred =
-        voices.find(v => v.lang.startsWith("en") && v.localService) ??
-        voices.find(v => v.lang.startsWith("en")) ??
-        voices[0];
-      if (preferred) utt.voice = preferred;
+  const speak = useCallback(async (text: string) => {
+    try {
+      const res = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
 
-      // Safety fallback: if onend never fires (Chrome bug), force idle after estimated duration
-      // ~80ms per word is a rough estimate for normal speech rate
-      const wordCount = text.split(/\s+/).length;
-      const estimatedMs = Math.max(wordCount * 450, 2000);
-      const safetyTimer = setTimeout(() => setPhase("idle"), estimatedMs + 1000);
+      if (!res.ok) throw new Error("TTS failed");
+
+      const arrayBuffer = await res.arrayBuffer();
+      const audioCtx = new AudioContext();
+      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+      const source = audioCtx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioCtx.destination);
 
       const returnToIdle = () => {
-        clearTimeout(safetyTimer);
         setPhase("idle");
         setVideoIndex(scene.idleVideoIndex ?? scene.videos.length);
       };
-      utt.onend = returnToIdle;
-      utt.onerror = returnToIdle;
+
+      source.onended = returnToIdle;
+      source.start();
+    } catch {
+      // Fallback to browser TTS if ElevenLabs fails
+      const synth = synthRef.current ?? window.speechSynthesis;
+      if (!synth) { setPhase("idle"); return; }
+      const utt = new SpeechSynthesisUtterance(text);
+      utt.rate = 0.88; utt.lang = "en-US";
+      utt.onend = () => { setPhase("idle"); setVideoIndex(scene.idleVideoIndex ?? scene.videos.length); };
+      utt.onerror = () => { setPhase("idle"); };
       synth.speak(utt);
-    }, 50);
-  }, []);
+    }
+  }, [scene.idleVideoIndex, scene.videos.length]);
+
+  const triggerLeaving = useCallback(() => {
+    const leavingClip = scene.videos.find(v => v.trigger === "leaving");
+    if (leavingClip) setVideoIndex(leavingClip.index);
+    setTimeout(() => {
+      setVideoIndex(scene.idleVideoIndex ?? 1);
+      setConversationStarted(false);
+      setMessages([]);
+      setReply("");
+      setPhase("idle");
+    }, 4000);
+  }, [scene.videos, scene.idleVideoIndex]);
+
+  const resetInactivityTimer = useCallback(() => {
+    if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+    inactivityTimer.current = setTimeout(() => triggerLeaving(), 60000);
+  }, [triggerLeaving]);
 
   const selectVideo = useCallback(async (botReply: string): Promise<number> => {
     try {
@@ -114,7 +144,7 @@ export default function StagePage() {
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: newMessages }),
+      body: JSON.stringify({ messages: newMessages, model }),
     });
     if (!res.body) { setPhase("idle"); return; }
 
@@ -149,14 +179,32 @@ export default function StagePage() {
     setMessages(prev => [...prev, { role: "assistant", content: fullReply }]);
     setPhase("speaking");
 
-    // Wait for video selection to complete (it was fired in parallel during streaming)
-    // then set the video index and start speech in the same tick — fully synchronised
-    const idx = await videoSelectPromise;
-    setVideoIndex(idx);
+    // Start speaking immediately
     speak(fullReply);
-  }, [messages, selectVideo, speak]);
+
+    // Update video when selector finishes — if clip has includesSpeech, wait for speech to end first
+    videoSelectPromise.then(idx => {
+      const clip = scene.videos.find(v => v.index === idx);
+      if (clip?.includesSpeech) {
+        const wordCount = fullReply.split(/\s+/).length;
+        setTimeout(() => setVideoIndex(idx), wordCount * 450 + 500);
+      } else {
+        setVideoIndex(idx);
+      }
+    });
+  }, [messages, model, selectVideo, speak, scene.idleVideoIndex, scene.videos.length]);
 
   const startListening = useCallback(() => {
+    // Play entering animation on first interaction
+    if (!conversationStarted) {
+      setConversationStarted(true);
+      const enteringClip = scene.videos.find(v => v.trigger === "entering");
+      if (enteringClip) {
+        setVideoIndex(enteringClip.index);
+        setTimeout(() => setVideoIndex(scene.idleVideoIndex ?? 1), 3000);
+      }
+      resetInactivityTimer();
+    }
     const SR =
       (window as typeof window & { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition ??
       (typeof SpeechRecognition !== "undefined" ? SpeechRecognition : null);
@@ -177,9 +225,18 @@ export default function StagePage() {
       if (sent || !text.trim()) return;
       sent = true;
       if (silenceTimer) clearTimeout(silenceTimer);
-      rec.abort(); // stop cleanly without triggering onend logic again
+      rec.abort();
       t.current.listenEnd = performance.now();
-      sendMessage(text.trim());
+      // Detect farewell
+      if (/\b(bye|goodbye|see you|farewell|ciao)\b/i.test(text)) {
+        triggerLeaving();
+        return;
+      }
+      resetInactivityTimer();
+      const normalized = text.trim()
+        .replace(/\b(hbc|hbg|hbo|h\.b\.k|h b k|each be kay|aitch be kay)\b/gi, "HBK Saar")
+        .replace(/\b(zaar|sar|czar|tsar)\b/gi, "Saar");
+      sendMessage(normalized);
     };
 
     rec.onstart = () => { setPhase("listening"); setTranscript(""); t.current.listenStart = performance.now(); };
@@ -198,7 +255,7 @@ export default function StagePage() {
 
       // Reset silence timer — send 1.2s after user stops talking
       if (silenceTimer) clearTimeout(silenceTimer);
-      silenceTimer = setTimeout(() => sendOnce(collected + interim), 1200);
+      silenceTimer = setTimeout(() => sendOnce(collected + interim), 6000);
     };
 
     // When recognition ends naturally (browser detected long silence), send what we have
@@ -215,7 +272,7 @@ export default function StagePage() {
 
     recognitionRef.current = rec;
     rec.start();
-  }, [sendMessage]);
+  }, [sendMessage, conversationStarted, scene.videos, scene.idleVideoIndex, resetInactivityTimer, triggerLeaving]);
 
   const stopListening = useCallback(() => {
     recognitionRef.current?.stop();
@@ -299,9 +356,25 @@ export default function StagePage() {
         </div>
       </div>
 
+      <div className="absolute top-4 left-4 z-20 flex gap-1">
+        {(["mistral-large-latest", "open-mistral-nemo"] as Model[]).map(m => (
+          <button
+            key={m}
+            onClick={() => setModel(m)}
+            className={`text-xs px-3 py-1 rounded-full border transition-all ${
+              model === m
+                ? "bg-white text-black border-white font-semibold"
+                : "bg-black/40 text-white/60 border-white/20 hover:border-white/50"
+            }`}
+          >
+            {m === "mistral-large-latest" ? "Large" : "Nemo"}
+          </button>
+        ))}
+      </div>
+
       {process.env.NODE_ENV === "development" && loopMs !== null && (
         <div className="absolute top-4 right-4 z-20 bg-black/70 text-white/80 text-xs p-3 rounded-lg font-mono space-y-1">
-          <p className="font-bold text-white mb-1">Latency</p>
+          <p className="font-bold text-white mb-1">Latency — {model === "mistral-large-latest" ? "Large" : "Nemo"}</p>
           <p>STT → first token: <span className="text-yellow-300">{loopMs}ms</span></p>
           {t.current.selectorEnd && t.current.thinkStart && (
             <p>Selector: <span className="text-green-300">{Math.round(t.current.selectorEnd - t.current.thinkStart)}ms</span></p>
