@@ -1,29 +1,14 @@
-/**
- * VideoClip — represents one video file the character can play
- *
- * index: the number Mistral returns to select this clip (1, 2, 3...)
- * url:   path to the MP4 file, either local (/videos/clip.mp4) or remote (https://...)
- * label: human-readable name shown in the creator dashboard
- */
 export interface VideoClip {
   index: number;
   url: string;
   label: string;
-  /** Optional longer description — helps the AI pick the right clip */
   description?: string;
+  /** If true: speak first, then play the video */
+  includesSpeech?: boolean;
+  /** "entering" plays once when conversation starts, "leaving" plays on bye/timeout */
+  trigger?: "entering" | "leaving";
 }
 
-/**
- * Scene — the complete configuration for one AgentStage experience
- *
- * name:            internal label for the creator, not shown to visitors
- * characterName:   displayed on screen above the mic button
- * systemPrompt:    sent to Mistral as the "system" message — defines the character's
- *                  personality, knowledge, and speaking style
- * idleMessage:     text shown (and optionally spoken) before the visitor says anything
- * selectionPrompt: rules the LLM uses to pick which video clip matches a given reply
- * videos:          list of VideoClip objects — one entry per MP4 file
- */
 export interface Scene {
   name: string;
   characterName: string;
@@ -31,67 +16,84 @@ export interface Scene {
   idleMessage: string;
   selectionPrompt: string;
   videos: VideoClip[];
-  /** Layout orientation for the consumer view */
   orientation: "portrait" | "landscape" | "auto";
-  /** Whether to show the bot's reply as text on screen */
   showBotText: boolean;
-  /** Which video clip plays when idle (loops until visitor speaks) */
   idleVideoIndex: number;
-  /** URL slug — set by the server after first save */
   slug?: string;
 }
 
-// ─── Prototype scene ──────────────────────────────────────────────────────────
-// This is the hardcoded scene used during the prototype phase.
-// In production, this object would be fetched from Supabase by scene slug,
-// allowing any creator to publish their own scene at a unique URL.
-
 export const scene: Scene = {
-  // Internal name — used as the slug base when generating share URLs
-  name: "HBK Exhibition Guide",
+  name: "HBK Media Informatics Guide",
 
-  // Shown on the consumer screen above the mic button
   characterName: "Mira",
 
-  // Displayed before the visitor speaks for the first time
-  idleMessage: "Hi! Ask me anything about the exhibition.",
+  idleMessage: "Hi! I'm Mira. Ask me anything about studying Media Informatics at HBK Saar.",
 
-  // Sent to Mistral as the first message (role: "system")
-  // This shapes every reply — keep it focused and concise
-  systemPrompt: `You are Mira, a friendly and knowledgeable guide at HBK Saar, the art and design college in Saarbrücken, Germany.
-You help visitors understand the artworks, find their way around, and learn about the students and faculty.
-Keep every reply to two or three short sentences — this is a voice conversation.
-Be warm, curious, and enthusiastic about art.`,
+  systemPrompt: `You are Mira, a friendly guide at HBK Saar (Hochschule der Bildenden Künste Saar) — the art and design college in Saarbrücken, Germany.
+You help visitors, prospective students, and current students learn about HBK Saar and its Media Informatics program.
+Keep every reply to ONE or TWO short sentences maximum — this is a voice conversation, brevity is essential.
+Never use lists or bullet points. Be warm and helpful.
+IMPORTANT: If the user mentions "HBC", "HBG", "HBO", "each be kay", "H B K", "hbk", "the school", "this school", "the university", "this place" — they always mean HBK Saar. Treat all of these as referring to HBK Saar.
 
-  // Sent to the selector LLM along with the bot's reply
-  // Must return ONLY a single digit — no other text
-  // One bullet per video clip — be specific to avoid mis-fires
-  selectionPrompt: `Read the chatbot reply below, then pick the best video from this list.
+--- HBK SAAR OVERVIEW ---
+HBK Saar (Hochschule der Bildenden Künste Saar) is an art and design college in Saarbrücken, Germany.
+Programs offered: Fine Art, Communication Design, Product Design, Media Art & Design, Art Education, and Media Informatics (jointly with Saarland University).
+Facilities include workshops, studios, a university gallery, and an evening school.
+There is an International Office, student counseling, semester tickets, and bike-sharing.
+Students can apply via the SIM-Bewerbungsportal. Social media: Instagram, Facebook, YouTube.
+
+--- MEDIA INFORMATICS FAQ ---
+
+Getting oriented:
+- HBK provides a Google Maps overview of buildings, bus connections from Saarland University (lines 101, 102, 109 to Hansahaus/Ludwigskirche), virtual facility tours, and ASTA resources for international students.
+
+Course registration:
+- Each course has its own registration process in the course catalog.
+- All courses must also be registered via a Google Form.
+- "Media Art & Design Basics" requires both lecturer registration AND LSF/HISPOS university registration.
+- Some courses use Google Classroom — you need an HBK Google Account (request via form).
+
+Bachelor program courses at HBK:
+- Media Art & Design Basics: 4 CP, ungraded, offered every winter semester.
+- Project courses (Atelierprojekt kurz): 8 CP, graded.
+- Freie Punkte electives: up to 10 CP, ungraded. Excluded: Computer Basics, foundational MAD courses, previously completed courses.
+- Media project: 9 CP, ungraded.
+- A 16 CP studio project can be split into two 8 CP certificates with prior agreement from the professor.
+
+Master program courses at HBK:
+- Project Media Art & Design: 8 CP, graded (shortened Atelierprojekt kurz).
+- Wahlpflicht MAD: 8 CP, ungraded — most HBK courses qualify except foundational ones.
+- Graded credits can be requested by discussing with the lecturer at the start of the course.
+
+Grades and certification:
+- Grades appear in LSF by September (summer semester) or March (winter semester).
+- Grading breakdown (non-binding): Idea & Concept 25%, Implementation 35%, Result/Prototype 25%, Documentation & Presentation 15%.
+- Project documentation must include technical and process overviews, research results, abandoned ideas, software guides, images, and a 1–2 minute video.
+
+Contacts:
+- For questions: email Michael Schmitz or contact the Examinations Office of STEM faculties at Saarland University.
+- For admission and examination regulations: Examinations Office of MINT faculties, Saarland University.`,
+
+  selectionPrompt: `Read the chatbot reply below and pick the best video.
 Reply with ONLY a single number — nothing else.
 
-1 = explaining an artwork, material, or artistic concept
-2 = giving directions or practical information
-3 = something playful, funny, or light-hearted
-4 = greeting, farewell, or welcoming a visitor
+1 = idle / waiting (no one is talking)
+2 = happy, enthusiastic, welcoming, or positive answer
+3 = serious, detailed explanation or complex answer
+4 = greeting or farewell
 5 = anything else / general talking`,
 
-  // Each entry maps a clip index to an MP4 file
-  // Files live in /public/videos/ — served statically by Next.js
-  // The index must match the numbers used in selectionPrompt above
   videos: [
-    { index: 1, url: "/videos/explaining.mp4", label: "Explaining", description: "Use when describing an artwork, material, technique, or artistic concept in detail." },
-    { index: 2, url: "/videos/directing.mp4",  label: "Directing",  description: "Use when giving directions, locations, practical information about the venue." },
-    { index: 3, url: "/videos/playful.mp4",    label: "Playful",    description: "Use when the reply is playful, funny, light-hearted, or includes a joke." },
-    { index: 4, url: "/videos/greeting.mp4",   label: "Greeting",   description: "Use when welcoming a visitor, saying hello, goodbye, or thanking them." },
-    { index: 5, url: "/videos/neutral.mp4",    label: "Neutral",    description: "Use for anything else — general talking, unclear context, or fallback." },
+    { index: 1, url: "/videos/neutral.mp4",    label: "Idle",     description: "Loops while waiting for the visitor to speak." },
+    { index: 2, url: "/videos/playful.mp4",    label: "Happy",    description: "Use for positive, enthusiastic, or welcoming replies." },
+    { index: 3, url: "/videos/explaining.mp4", label: "Serious",  description: "Use for detailed explanations or complex information." },
+    { index: 4, url: "/videos/greeting.mp4",   label: "Greeting", description: "Use for greetings and farewells." },
+    { index: 5, url: "/videos/neutral.mp4",    label: "Neutral",  description: "Use for anything else — general talking or fallback." },
+    { index: 6, url: "/videos/greeting.mp4",   label: "Entering", description: "Plays once when the conversation starts.", trigger: "entering" },
+    { index: 7, url: "/videos/directing.mp4",  label: "Leaving",  description: "Plays when the user says bye or after 1 minute of silence.", trigger: "leaving" },
   ],
 
-  // auto = detect from device; portrait = force vertical; landscape = force horizontal
   orientation: "auto",
-
-  // Which clip loops on the idle screen (index matches video clip index)
-  idleVideoIndex: 5,
-
-  // Whether the bot's reply text is shown on screen during playback
+  idleVideoIndex: 1,
   showBotText: true,
 };
