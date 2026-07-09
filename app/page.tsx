@@ -153,10 +153,10 @@ export default function StagePage() {
         t.current.selectorEnd = performance.now();
         return data.videoIndex as number;
       } catch {
-        return scene.videos.length; // fallback to last (neutral) clip
+        return scene.idleVideoIndex;
       }
     },
-    [scene.videos.length],
+    [scene.idleVideoIndex],
   );
 
   const sendMessage = useCallback(
@@ -185,9 +185,6 @@ export default function StagePage() {
       const decoder = new TextDecoder();
       let fullReply = "";
       let firstChunk = true;
-      let videoSelectPromise: Promise<number> = Promise.resolve(
-        scene.videos.length,
-      );
 
       while (true) {
         const { done, value } = await reader.read();
@@ -204,8 +201,6 @@ export default function StagePage() {
               if (firstChunk) {
                 t.current.firstToken = performance.now();
                 firstChunk = false;
-                // Start video selection immediately on first token — runs in parallel with rest of stream
-                videoSelectPromise = selectVideo(fullReply + delta);
               }
               fullReply += delta;
               setReply(fullReply);
@@ -225,7 +220,8 @@ export default function StagePage() {
       // Start speaking immediately
       speak(fullReply);
 
-      // Update video when selector finishes — if clip has includesSpeech, wait for speech to end first
+      // Select video from the complete reply, then update — if clip has includesSpeech, wait for speech to end first
+      const videoSelectPromise = selectVideo(fullReply);
       videoSelectPromise.then((idx) => {
         const clip = scene.videos.find((v) => v.index === idx);
         if (clip?.includesSpeech) {
@@ -242,7 +238,7 @@ export default function StagePage() {
       selectVideo,
       speak,
       scene.idleVideoIndex,
-      scene.videos.length,
+      scene.videos,
     ],
   );
 
