@@ -22,7 +22,9 @@ export async function POST(req: NextRequest) {
   const { botReply } = await req.json();
   const scene = await loadScene();
 
-  const clipList = scene.videos
+  const selectableVideos = scene.videos.filter(v => !v.trigger);
+
+  const clipList = selectableVideos
     .map(v => `${v.index} = ${v.description?.trim() || v.label}`)
     .join("\n");
 
@@ -52,14 +54,14 @@ Reply to classify: "${botReply}"`;
     }),
   });
 
-  if (!res.ok) return Response.json({ videoIndex: scene.videos.length });
+  if (!res.ok) return Response.json({ videoIndex: scene.idleVideoIndex });
 
   const data = await res.json();
-  const raw = data.choices?.[0]?.message?.content?.trim() ?? String(scene.videos.length);
+  const raw = data.choices?.[0]?.message?.content?.trim() ?? String(scene.idleVideoIndex);
   const parsed = parseInt(raw);
-  const videoIndex = (!isNaN(parsed) && parsed >= 1 && parsed <= scene.videos.length)
+  const videoIndex = (!isNaN(parsed) && selectableVideos.some(v => v.index === parsed))
     ? parsed
-    : scene.videos.length;
+    : scene.idleVideoIndex;
 
   return Response.json({ videoIndex });
 }

@@ -16,7 +16,11 @@ export const metadata: Metadata = {
 // RootLayout wraps every page in the app
 // Next.js requires this file — it provides the <html> and <body> tags
 // children = whatever page is currently being rendered (e.g. page.tsx or creator/page.tsx)
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     // lang="en" helps screen readers and browsers know the page language
     <html lang="en">
