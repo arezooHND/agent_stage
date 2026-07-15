@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import QRCode from "qrcode";
 import type { Scene, VideoClip } from "@/lib/scene";
 import { scene as defaultScene } from "@/lib/scene";
 
@@ -721,10 +722,27 @@ function SectionShare({ scene }: { scene: Scene }) {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "") || "my-scene";
-  const url = `https://agentstage.app/s/${slug}`;
+  // share the live site itself — the visitor page is at the root
+  const [url, setUrl] = useState("");
+  useEffect(() => { setUrl(window.location.origin + "/"); }, []);
   const embedCode = `<iframe src="${url}" width="420" height="720" allow="microphone" frameborder="0"></iframe>`;
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedEmbed, setCopiedEmbed] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState("");
+
+  useEffect(() => {
+    if (!url) return;
+    QRCode.toDataURL(url, { width: 512, margin: 2 })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(""));
+  }, [url]);
+
+  const downloadQr = () => {
+    const a = document.createElement("a");
+    a.href = qrDataUrl;
+    a.download = `${slug}-qr.png`;
+    a.click();
+  };
 
   const copy = (text: string, which: "url" | "embed") => {
     navigator.clipboard.writeText(text).then(() => {
@@ -763,11 +781,14 @@ function SectionShare({ scene }: { scene: Scene }) {
       </SectionCard>
 
       {/* Share URL */}
-      <SectionCard title="Share" subtitle="Give this link to visitors.">
+      <SectionCard title="Share" subtitle="Give this link to visitors. Edit it freely — the QR code updates live.">
         <div className="flex gap-2">
-          <code className="flex-1 text-xs text-slate-400 bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-3 truncate font-mono">
-            {url}
-          </code>
+          <input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            spellCheck={false}
+            className="flex-1 text-xs text-slate-300 bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-3 font-mono outline-none focus:border-indigo-500"
+          />
           <button
             onClick={() => copy(url, "url")}
             className="px-4 py-2 rounded-xl bg-slate-800 border border-slate-700/60 hover:border-slate-600 text-sm text-slate-300 hover:text-white transition-colors shrink-0"
@@ -775,62 +796,29 @@ function SectionShare({ scene }: { scene: Scene }) {
             {copiedUrl ? "Copied!" : "Copy"}
           </button>
         </div>
-        <p className="text-xs text-slate-600">
-          Deploy to Vercel first to make this URL live.
-        </p>
 
         {/* QR */}
         <div className="flex items-center gap-4">
-          <div className="w-24 h-24 bg-white rounded-xl flex items-center justify-center shrink-0">
-            <svg viewBox="0 0 100 100" className="w-20 h-20">
-              <rect
-                x="5"
-                y="5"
-                width="38"
-                height="38"
-                rx="4"
-                fill="none"
-                stroke="black"
-                strokeWidth="3"
-              />
-              <rect x="14" y="14" width="20" height="20" rx="2" fill="black" />
-              <rect
-                x="57"
-                y="5"
-                width="38"
-                height="38"
-                rx="4"
-                fill="none"
-                stroke="black"
-                strokeWidth="3"
-              />
-              <rect x="66" y="14" width="20" height="20" rx="2" fill="black" />
-              <rect
-                x="5"
-                y="57"
-                width="38"
-                height="38"
-                rx="4"
-                fill="none"
-                stroke="black"
-                strokeWidth="3"
-              />
-              <rect x="14" y="66" width="20" height="20" rx="2" fill="black" />
-              <rect x="57" y="57" width="8" height="8" rx="1" fill="black" />
-              <rect x="70" y="57" width="8" height="8" rx="1" fill="black" />
-              <rect x="83" y="57" width="12" height="8" rx="1" fill="black" />
-              <rect x="57" y="70" width="12" height="8" rx="1" fill="black" />
-              <rect x="74" y="70" width="8" height="8" rx="1" fill="black" />
-              <rect x="57" y="83" width="8" height="12" rx="1" fill="black" />
-              <rect x="70" y="83" width="25" height="8" rx="1" fill="black" />
-              <rect x="87" y="83" width="8" height="12" rx="1" fill="black" />
-            </svg>
+          <div className="w-32 h-32 bg-white rounded-xl flex items-center justify-center shrink-0 overflow-hidden">
+            {qrDataUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={qrDataUrl} alt={`QR code for ${url}`} className="w-full h-full" />
+            ) : (
+              <p className="text-xs text-slate-400">…</p>
+            )}
           </div>
           <div>
             <p className="text-sm text-white font-medium mb-1">QR Code</p>
-            <p className="text-xs text-slate-500">
-              Print and place near your installation for visitors to scan.
+            <p className="text-xs text-slate-500 mb-2">
+              Scans directly to your live agent. Print and place near your installation.
             </p>
+            <button
+              onClick={downloadQr}
+              disabled={!qrDataUrl}
+              className="px-4 py-2 rounded-xl bg-slate-800 border border-slate-700/60 hover:border-slate-600 text-sm text-slate-300 hover:text-white transition-colors disabled:opacity-40"
+            >
+              Download PNG
+            </button>
           </div>
         </div>
       </SectionCard>
