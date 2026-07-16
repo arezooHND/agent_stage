@@ -1,22 +1,5 @@
 import { NextRequest } from "next/server";
-import { supabase } from "@/lib/supabase";
-import { scene as defaultScene, type Scene } from "@/lib/scene";
-
-export const runtime = "edge";
-
-async function loadScene(): Promise<Scene> {
-  try {
-    const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), 800));
-    const query = supabase.from("scenes").select("data").order("updated_at", { ascending: false }).limit(1).single();
-    const result = await Promise.race([query, timeout]);
-    if (!result) return defaultScene;
-    const { data, error } = result as Awaited<typeof query>;
-    if (error || !data) return defaultScene;
-    return { ...defaultScene, ...(data as { data: Partial<Scene> }).data };
-  } catch {
-    return defaultScene;
-  }
-}
+import { loadScene } from "@/lib/load-scene";
 
 export async function POST(req: NextRequest) {
   const { botReply } = await req.json();

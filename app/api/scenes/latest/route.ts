@@ -1,14 +1,18 @@
-import { supabase } from "@/lib/supabase";
+import pool from "@/lib/db";
+import { toScene } from "@/lib/scene-mapper";
 
 export async function GET() {
   try {
-    const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), 800));
-    const query = supabase.from("scenes").select("data").order("updated_at", { ascending: false }).limit(1).single();
-    const result = await Promise.race([query, timeout]);
-    if (!result) return Response.json({ error: "not found" }, { status: 404 });
-    const { data, error } = result as Awaited<typeof query>;
-    if (error || !data) return Response.json({ error: "not found" }, { status: 404 });
-    return Response.json((data as { data: unknown }).data);
+    const agentResult = await pool.query("SELECT * FROM agent ORDER BY updated_at DESC LIMIT 1");
+    if (agentResult.rows.length === 0) return Response.json({ error: "not found" }, { status: 404 });
+
+    const agent = agentResult.rows[0];
+    const videosResult = await pool.query(
+      "SELECT video_order, label, description, file_path, trigger, includes_speech FROM videos WHERE agent_id = $1 ORDER BY video_order ASC",
+      [agent.id]
+    );
+
+    return Response.json(toScene(agent, videosResult.rows));
   } catch {
     return Response.json({ error: "not found" }, { status: 404 });
   }
