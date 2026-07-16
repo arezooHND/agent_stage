@@ -107,13 +107,13 @@ Reply with ONLY a single number — nothing else.
 5 = anything else / general talking`,
 
   videos: [
-    { index: 1, url: "https://www.youtube-nocookie.com/embed/AvjiBtIDgHY?autoplay=1&mute=1&controls=0&loop=1&playlist=AvjiBtIDgHY", label: "Idle",     description: "Default video for all states." },
-    { index: 2, url: "https://www.youtube-nocookie.com/embed/AvjiBtIDgHY?autoplay=1&mute=1&controls=0&loop=1&playlist=AvjiBtIDgHY", label: "Happy",    description: "Use for positive, enthusiastic, or welcoming replies." },
-    { index: 3, url: "https://www.youtube-nocookie.com/embed/AvjiBtIDgHY?autoplay=1&mute=1&controls=0&loop=1&playlist=AvjiBtIDgHY", label: "Serious",  description: "Use for detailed explanations or complex information." },
-    { index: 4, url: "https://www.youtube-nocookie.com/embed/AvjiBtIDgHY?autoplay=1&mute=1&controls=0&loop=1&playlist=AvjiBtIDgHY", label: "Playful",  description: "Use for playful or fun replies." },
-    { index: 5, url: "https://www.youtube-nocookie.com/embed/AvjiBtIDgHY?autoplay=1&mute=1&controls=0&loop=1&playlist=AvjiBtIDgHY", label: "Neutral",  description: "Use for anything else — general talking or fallback." },
-    { index: 6, url: "https://www.youtube-nocookie.com/embed/AvjiBtIDgHY?autoplay=1&mute=1&controls=0&loop=1&playlist=AvjiBtIDgHY", label: "Entering", description: "Plays once when the conversation starts.", trigger: "entering" },
-    { index: 7, url: "https://www.youtube-nocookie.com/embed/AvjiBtIDgHY?autoplay=1&mute=1&controls=0&loop=1&playlist=AvjiBtIDgHY", label: "Leaving",  description: "Plays when the user says bye or after 1 minute of silence.", trigger: "leaving" },
+    { index: 1, url: "", label: "Idle",     description: "Default video for all states." },
+    { index: 2, url: "", label: "Happy",    description: "Use for positive, enthusiastic, or welcoming replies." },
+    { index: 3, url: "", label: "Serious",  description: "Use for detailed explanations or complex information." },
+    { index: 4, url: "", label: "Playful",  description: "Use for playful or fun replies." },
+    { index: 5, url: "", label: "Neutral",  description: "Use for anything else — general talking or fallback." },
+    { index: 6, url: "", label: "Entering", description: "Plays once when the conversation starts.", trigger: "entering" },
+    { index: 7, url: "", label: "Leaving",  description: "Plays when the user says bye or after 1 minute of silence.", trigger: "leaving" },
   ],
 
   orientation: "auto",
