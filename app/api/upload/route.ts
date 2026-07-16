@@ -1,7 +1,11 @@
 import { NextRequest } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { writeFile } from "fs/promises";
+import path from "path";
+import pool from "@/lib/db";
 
-// POST /api/upload — receive a video file, store in Supabase Storage, return URL
+const VIDEO_DIR = path.join(process.cwd(), "public", "videos");
+
+// POST /api/upload — save a video file to disk on this server and record it in Postgres
 export async function POST(req: NextRequest) {
   const formData = await req.formData();
   const file = formData.get("file") as File | null;
@@ -10,16 +14,42 @@ export async function POST(req: NextRequest) {
 
   // Unique filename: timestamp + original name to avoid collisions
   const filename = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+  const publicPath = `/videos/${filename}`;
 
-  const arrayBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(await file.arrayBuffer());
+  await writeFile(path.join(VIDEO_DIR, filename), buffer);
 
-  const { error } = await supabase.storage
-    .from("videos")
-    .upload(filename, arrayBuffer, { contentType: file.type, upsert: false });
+  try {
+    // There's currently one scene, so reuse its agent row (create it once if missing)
+    let agentResult = await pool.query("SELECT id FROM agent ORDER BY id LIMIT 1");
+    let agentId: number;
+    if (agentResult.rows.length === 0) {
+      const inserted = await pool.query(
+        `INSERT INTO agent (name, character_name, system_prompt, idle_message, orientation, show_bot_text, slug)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+        ["Default Scene", "Mira", "", "", "auto", true, "default"],
+      );
+      agentId = inserted.rows[0].id;
+    } else {
+      agentId = agentResult.rows[0].id;
+    }
 
-  if (error) return Response.json({ error: error.message }, { status: 500 });
+    const orderResult = await pool.query(
+      "SELECT COALESCE(MAX(video_order), 0) + 1 AS next_order FROM videos WHERE agent_id = $1",
+      [agentId],
+    );
 
-  const { data: urlData } = supabase.storage.from("videos").getPublicUrl(filename);
+    await pool.query(
+      `INSERT INTO videos (agent_id, video_order, label, file_path)
+       VALUES ($1, $2, $3, $4)`,
+      [agentId, orderResult.rows[0].next_order, file.name, publicPath],
+    );
+  } catch (err) {
+    return Response.json(
+      { error: err instanceof Error ? err.message : "db insert failed" },
+      { status: 500 },
+    );
+  }
 
-  return Response.json({ url: urlData.publicUrl, filename });
+  return Response.json({ url: publicPath, filename });
 }
