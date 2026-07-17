@@ -26,8 +26,6 @@ export default function Login({ onSuccess }: { onSuccess: () => void }) {
     }
 
     onSuccess();
-
-    alert("Wrong username or password");
   };
 
   return (
