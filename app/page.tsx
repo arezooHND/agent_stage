@@ -55,6 +55,9 @@ export default function StagePage() {
   }, [scene.orientation]);
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  // Synchronous guard — React's `phase` state doesn't update until rec.onstart fires,
+  // leaving a gap where a fast double-tap can start two recognition sessions at once.
+  const listeningActiveRef = useRef(false);
   const synthRef = useRef<SpeechSynthesis | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const t = useRef<Record<string, number>>({});
@@ -381,6 +384,9 @@ export default function StagePage() {
   );
 
   const startListening = useCallback(() => {
+    if (listeningActiveRef.current) return;
+    listeningActiveRef.current = true;
+
     if (!conversationStarted) {
       setConversationStarted(true);
       const enteringClip = scene.videos.find((v) => v.trigger === "entering");
@@ -399,6 +405,7 @@ export default function StagePage() {
       ).webkitSpeechRecognition ??
       (typeof SpeechRecognition !== "undefined" ? SpeechRecognition : null);
     if (!SR) {
+      listeningActiveRef.current = false;
       alert("Use Chrome for speech recognition.");
       return;
     }
@@ -443,6 +450,7 @@ export default function StagePage() {
     };
 
     rec.onend = () => {
+      listeningActiveRef.current = false;
       if (silenceTimer) clearTimeout(silenceTimer);
       // use interim too — single words often never become "final" before onend fires
       const best = (collected + lastInterim).trim();
