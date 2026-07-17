@@ -450,7 +450,7 @@ export default function StagePage() {
         <button
           onClick={() => {
             if (phase === "idle") startListening();
-            else if (phase === "listening") { stopListening(); finalizeRecording(transcript); }
+            else if (phase === "listening") stopListening();
           }}
           disabled={phase === "thinking" || phase === "speaking"}
           aria-label={phaseLabel[phase]}
