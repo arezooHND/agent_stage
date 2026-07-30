@@ -724,7 +724,9 @@ function SectionShare({ scene }: { scene: Scene }) {
       .replace(/^-|-$/g, "") || "my-scene";
   // share the live site itself — the visitor page is at the root
   const [url, setUrl] = useState("");
-  useEffect(() => { setUrl(window.location.origin + "/"); }, []);
+  useEffect(() => {
+    setUrl(window.location.origin + "/");
+  }, []);
   const embedCode = `<iframe src="${url}" width="420" height="720" allow="microphone" frameborder="0"></iframe>`;
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedEmbed, setCopiedEmbed] = useState(false);
@@ -781,7 +783,10 @@ function SectionShare({ scene }: { scene: Scene }) {
       </SectionCard>
 
       {/* Share URL */}
-      <SectionCard title="Share" subtitle="Give this link to visitors. Edit it freely — the QR code updates live.">
+      <SectionCard
+        title="Share"
+        subtitle="Give this link to visitors. Edit it freely — the QR code updates live."
+      >
         <div className="flex gap-2">
           <input
             value={url}
@@ -802,7 +807,11 @@ function SectionShare({ scene }: { scene: Scene }) {
           <div className="w-32 h-32 bg-white rounded-xl flex items-center justify-center shrink-0 overflow-hidden">
             {qrDataUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={qrDataUrl} alt={`QR code for ${url}`} className="w-full h-full" />
+              <img
+                src={qrDataUrl}
+                alt={`QR code for ${url}`}
+                className="w-full h-full"
+              />
             ) : (
               <p className="text-xs text-slate-400">…</p>
             )}
@@ -810,7 +819,8 @@ function SectionShare({ scene }: { scene: Scene }) {
           <div>
             <p className="text-sm text-white font-medium mb-1">QR Code</p>
             <p className="text-xs text-slate-500 mb-2">
-              Scans directly to your live agent. Print and place near your installation.
+              Scans directly to your live agent. Print and place near your
+              installation.
             </p>
             <button
               onClick={downloadQr}
@@ -962,7 +972,6 @@ export default function CreatorPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Load latest scene from DB on mount — source of truth is Supabase, not localStorage
   useEffect(() => {
     fetch("/api/scenes/latest")
       .then((r) => (r.ok ? r.json() : null))
